@@ -2,7 +2,7 @@
 
 import React from "react"
 
-import { useRef, useState } from "react"
+import { useRef, useState, useEffect, useMemo } from "react"
 import { Canvas, useFrame } from "@react-three/fiber"
 import { OrbitControls, Text, Line } from "@react-three/drei"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -134,6 +134,59 @@ function FlightPath({ sequence, isActive }: { sequence: DroneSequence; isActive:
   )
 }
 
+// Light beam path with color gradient
+function LightBeamPath({ sequence }: { sequence: DroneSequence }) {
+  const points = useMemo(
+    () => sequence.points.map((p) => new THREE.Vector3((p.x - 200) / 20, p.z / 10, (p.y - 150) / 20)),
+    [sequence.points]
+  )
+  const colors = useMemo(
+    () => sequence.points.map((p) => new THREE.Color(p.color)),
+    [sequence.points]
+  )
+  const lineRef = useRef<THREE.Line>(null)
+  useEffect(() => {
+    if (lineRef.current && points.length > 1) {
+      const geometry = new THREE.BufferGeometry().setFromPoints(points)
+      const colorArray = new Float32Array(points.length * 3)
+      colors.forEach((color, i) => {
+        color.toArray(colorArray, i * 3)
+      })
+      geometry.setAttribute("color", new THREE.BufferAttribute(colorArray, 3))
+      lineRef.current.geometry = geometry
+    }
+  }, [points, colors])
+  if (points.length < 2) return null
+  return (
+    <line ref={lineRef}>
+      <bufferGeometry />
+      {/* Make the beam much thicker and easier to see */}
+      <lineBasicMaterial vertexColors linewidth={20} color="#fff" />
+    </line>
+  )
+}
+
+// Normal mode: black lines, red waypoints
+function NormalFlightPath({ sequence }: { sequence: DroneSequence }) {
+  const points = useMemo(
+    () => sequence.points.map((p) => new THREE.Vector3((p.x - 200) / 20, p.z / 10, (p.y - 150) / 20)),
+    [sequence.points]
+  )
+  if (points.length < 2) return null
+  return (
+    <group>
+      {/* Connect waypoints with a black line */}
+      <Line points={points} color="#000" lineWidth={4} />
+      {points.map((pt, idx) => (
+        <mesh key={idx} position={pt}>
+          <sphereGeometry args={[0.13]} />
+          <meshStandardMaterial color="#ff3333" emissive="#ff3333" emissiveIntensity={0.7} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
 // Simple room environment
 function SimpleRoom() {
   return (
@@ -201,13 +254,41 @@ function Scene({
   currentTime,
   selectedSequence,
   isPlaying,
+  mode = 'normal',
 }: FlightPreviewProps & {
   selectedSequence: string | null
   isPlaying: boolean
+  mode?: 'normal' | 'lightbeam'
 }) {
-  const displaySequence = selectedSequence
-    ? sequences.find((seq) => seq.id === selectedSequence)
-    : sequences.find((seq) => seq.id === activeSequence)
+  // New: Support for 'all' routes
+  const isAllRoutes = selectedSequence === "__all__"
+
+  // Helper to get the current route index and time offset
+  const getAllRoutesState = () => {
+    if (!isAllRoutes || sequences.length === 0) return { routeIndex: 0, routeTime: 0 }
+    let totalDuration = 0
+    const durations = sequences.map((seq) => seq.duration)
+    const sum = durations.reduce((a, b) => a + b, 0)
+    let t = (isPlaying ? currentTime : currentTime) % sum
+    for (let i = 0; i < durations.length; i++) {
+      if (t < durations[i]) {
+        return { routeIndex: i, routeTime: t }
+      }
+      t -= durations[i]
+    }
+    return { routeIndex: 0, routeTime: 0 }
+  }
+
+  // For single route mode
+  const displaySequence = !isAllRoutes
+    ? (selectedSequence
+        ? sequences.find((seq) => seq.id === selectedSequence)
+        : sequences.find((seq) => seq.id === activeSequence))
+    : undefined
+
+  // For all routes mode
+  const { routeIndex, routeTime } = getAllRoutesState()
+  const allRoutesSequence = isAllRoutes && sequences[routeIndex]
 
   // Simple position calculation
   const getCurrentPosition = (): [number, number, number] => {
@@ -253,8 +334,14 @@ function Scene({
       <SimpleRoom />
       <SimpleLighting />
 
-      {/* Flight Path */}
-      {displaySequence && <FlightPath sequence={displaySequence} isActive={true} />}
+      {/* Flight Path or Light Beam */}
+      {displaySequence && (
+        mode === 'lightbeam' ? (
+          <LightBeamPath sequence={displaySequence} />
+        ) : (
+          <NormalFlightPath sequence={displaySequence} />
+        )
+      )}
 
       {/* Drone */}
       {displaySequence && displaySequence.points.length > 0 && (
@@ -269,10 +356,37 @@ export function FlightPreview({ sequences, activeSequence, currentTime }: Flight
   const [isPlaying, setIsPlaying] = useState(false)
   const [localTime, setLocalTime] = useState(0)
   const [cameraMode, setCameraMode] = useState<"orbit" | "follow" | "cinematic">("orbit")
+  const [mode, setMode] = useState<'lightbeam' | 'normal'>('normal')
 
-  const displaySequence = selectedSequence
-    ? sequences.find((seq) => seq.id === selectedSequence)
-    : sequences.find((seq) => seq.id === activeSequence)
+  // New: Support for 'all' routes
+  const isAllRoutes = selectedSequence === "__all__"
+
+  // Helper to get the current route index and time offset
+  const getAllRoutesState = () => {
+    if (!isAllRoutes || sequences.length === 0) return { routeIndex: 0, routeTime: 0 }
+    let totalDuration = 0
+    const durations = sequences.map((seq) => seq.duration)
+    const sum = durations.reduce((a, b) => a + b, 0)
+    let t = (isPlaying ? localTime : currentTime) % sum
+    for (let i = 0; i < durations.length; i++) {
+      if (t < durations[i]) {
+        return { routeIndex: i, routeTime: t }
+      }
+      t -= durations[i]
+    }
+    return { routeIndex: 0, routeTime: 0 }
+  }
+
+  // For single route mode
+  const displaySequence = !isAllRoutes
+    ? (selectedSequence
+        ? sequences.find((seq) => seq.id === selectedSequence)
+        : sequences.find((seq) => seq.id === activeSequence))
+    : undefined
+
+  // For all routes mode
+  const { routeIndex, routeTime } = getAllRoutesState()
+  const allRoutesSequence = isAllRoutes && sequences[routeIndex]
 
   // Auto-play simulation
   const effectiveTime = isPlaying ? localTime : currentTime
@@ -283,6 +397,10 @@ export function FlightPreview({ sequences, activeSequence, currentTime }: Flight
 
     const interval = setInterval(() => {
       setLocalTime((prev) => {
+        if (isAllRoutes && sequences.length > 0) {
+          const sum = sequences.map((seq) => seq.duration).reduce((a, b) => a + b, 0)
+          return (prev + 50) % sum
+        }
         if (displaySequence) {
           return (prev + 50) % displaySequence.duration
         }
@@ -291,12 +409,12 @@ export function FlightPreview({ sequences, activeSequence, currentTime }: Flight
     }, 50)
 
     return () => clearInterval(interval)
-  }, [isPlaying, displaySequence])
+  }, [isPlaying, displaySequence, isAllRoutes, sequences])
 
   const handlePlayToggle = () => {
     setIsPlaying(!isPlaying)
     if (!isPlaying) {
-      setLocalTime(currentTime)
+      setLocalTime(effectiveTime)
     }
   }
 
@@ -319,6 +437,7 @@ export function FlightPreview({ sequences, activeSequence, currentTime }: Flight
                 <SelectValue placeholder="Select a route to preview" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="__all__">All Routes</SelectItem>
                 {sequences.map((sequence) => (
                   <SelectItem key={sequence.id} value={sequence.id}>
                     {sequence.name}
@@ -354,9 +473,31 @@ export function FlightPreview({ sequences, activeSequence, currentTime }: Flight
               <SelectItem value="cinematic">Cinematic</SelectItem>
             </SelectContent>
           </Select>
+
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium">Mode</label>
+            <select
+              value={mode}
+              onChange={e => setMode(e.target.value as 'lightbeam' | 'normal')}
+              className="border rounded px-2 py-1 text-sm"
+              title="Switch between Light Beam and Normal modes"
+            >
+              <option value="normal">Normal</option>
+              <option value="lightbeam">Light Beam</option>
+            </select>
+          </div>
         </div>
 
-        {displaySequence && (
+        {/* Info for all routes or single route */}
+        {isAllRoutes ? (
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{sequences.length} routes</Badge>
+            <Badge variant="outline">
+              {Math.round(sequences.map((s) => s.duration).reduce((a, b) => a + b, 0) / 1000)}s total
+            </Badge>
+            <Badge variant={isPlaying ? "default" : "secondary"}>{isPlaying ? "Playing" : "Paused"}</Badge>
+          </div>
+        ) : displaySequence && (
           <div className="flex items-center gap-2">
             <Badge variant="outline">{displaySequence.points.length} waypoints</Badge>
             <Badge variant="outline">{Math.round(displaySequence.duration / 1000)}s duration</Badge>
@@ -368,13 +509,26 @@ export function FlightPreview({ sequences, activeSequence, currentTime }: Flight
       {/* 3D Preview */}
       <div className="w-full h-[400px] bg-gray-50 rounded-lg overflow-hidden shadow-lg">
         <Canvas shadows camera={{ position: [12, 8, 12], fov: 60 }}>
-          <Scene
-            sequences={sequences}
-            activeSequence={activeSequence}
-            currentTime={effectiveTime}
-            selectedSequence={selectedSequence}
-            isPlaying={isPlaying}
-          />
+          {/* Render all paths if all routes, else just one */}
+          {isAllRoutes ? (
+            <Scene
+              sequences={sequences}
+              activeSequence={sequences[routeIndex]?.id}
+              currentTime={routeTime}
+              selectedSequence={sequences[routeIndex]?.id}
+              isPlaying={isPlaying}
+              mode={mode}
+            />
+          ) : (
+            <Scene
+              sequences={sequences}
+              activeSequence={activeSequence}
+              currentTime={effectiveTime}
+              selectedSequence={selectedSequence}
+              isPlaying={isPlaying}
+              mode={mode}
+            />
+          )}
           <OrbitControls
             enablePan={true}
             enableZoom={true}
@@ -390,7 +544,64 @@ export function FlightPreview({ sequences, activeSequence, currentTime }: Flight
       </div>
 
       {/* Route Information */}
-      {displaySequence && (
+      {isAllRoutes ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              All Routes
+              {isPlaying && (
+                <Badge variant="default" className="animate-pulse">
+                  Live Preview
+                </Badge>
+              )}
+            </CardTitle>
+            <CardDescription>Flight simulation for all routes in sequence</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+              <div>
+                <span className="font-medium text-gray-600">Routes:</span>
+                <div className="text-lg font-bold">{sequences.length}</div>
+              </div>
+              <div>
+                <span className="font-medium text-gray-600">Total Duration:</span>
+                <div className="text-lg font-bold">
+                  {Math.round(sequences.map((s) => s.duration).reduce((a, b) => a + b, 0) / 1000)}s
+                </div>
+              </div>
+              <div>
+                <span className="font-medium text-gray-600">Current Route:</span>
+                <div className="text-lg font-bold">{sequences[routeIndex]?.name || "-"}</div>
+              </div>
+              <div>
+                <span className="font-medium text-gray-600">Waypoints:</span>
+                <div className="text-lg font-bold">{sequences[routeIndex]?.points.length || 0}</div>
+              </div>
+              <div>
+                <span className="font-medium text-gray-600">Progress:</span>
+                <div className="text-lg font-bold">
+                  {Math.round((routeTime / (sequences[routeIndex]?.duration || 1)) * 100)}%
+                </div>
+              </div>
+            </div>
+            {/* Progress bar */}
+            <div className="mt-4">
+              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <span>Flight Progress</span>
+                <span>
+                  {Math.round(routeTime / 1000)}s / {Math.round((sequences[routeIndex]?.duration || 0) / 1000)}s
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-100"
+                  style={{ width: `${((routeTime / (sequences[routeIndex]?.duration || 1)) * 100).toFixed(1)}%` }}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : displaySequence && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -431,7 +642,6 @@ export function FlightPreview({ sequences, activeSequence, currentTime }: Flight
                 <div className="text-lg font-bold">{Math.round((effectiveTime / displaySequence.duration) * 100)}%</div>
               </div>
             </div>
-
             {/* Progress bar */}
             <div className="mt-4">
               <div className="flex justify-between text-xs text-gray-500 mb-1">

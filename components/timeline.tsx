@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Badge } from "@/components/ui/badge"
-import { Play, Pause, RotateCcw, Trash2 } from "lucide-react"
+import { Play, Pause, RotateCcw } from "lucide-react"
 import { ColorTimeline } from "@/components/color-timeline"
 import type { DroneSequence } from "@/app/page"
 
@@ -19,7 +19,6 @@ interface TimelineProps {
   onTimeChange: (time: number) => void
   onPlayToggle: () => void
   onSequenceSelect: (id: string) => void
-  onDeleteSequence: (id: string) => void
 }
 
 export function Timeline({
@@ -30,7 +29,6 @@ export function Timeline({
   onTimeChange,
   onPlayToggle,
   onSequenceSelect,
-  onDeleteSequence,
 }: TimelineProps) {
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
 
@@ -62,11 +60,6 @@ export function Timeline({
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
   }
 
-  const handleDeleteSequence = (e: React.MouseEvent, sequenceId: string) => {
-    e.stopPropagation() // Prevent sequence selection
-    onDeleteSequence(sequenceId)
-  }
-
   return (
     <div className="space-y-6">
       {/* Sequence Selection */}
@@ -90,16 +83,6 @@ export function Timeline({
                   }`}
                   onClick={() => onSequenceSelect(sequence.id)}
                 >
-                  {/* Delete button - appears on hover */}
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 p-0"
-                    onClick={(e) => handleDeleteSequence(e, sequence.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-
                   <div className="space-y-2 pr-8">
                     <h3 className="font-medium text-sm">{sequence.name}</h3>
                     <div className="flex flex-wrap gap-2 text-xs">

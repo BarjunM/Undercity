@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Eye, Trash2, Save, Plus } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { DroneSequence, DronePoint } from "@/app/page"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
 interface DrawingCanvasProps {
   sequence?: DroneSequence
@@ -40,6 +41,8 @@ export function DrawingCanvas({
   const [showWaypoints, setShowWaypoints] = useState(true)
   const [unsavedPoints, setUnsavedPoints] = useState<DronePoint[]>([])
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [showNameDialog, setShowNameDialog] = useState(false)
+  const [newRouteName, setNewRouteName] = useState("")
 
   const canvasWidth = 400
   const canvasHeight = 300
@@ -146,7 +149,12 @@ export function DrawingCanvas({
       const isPreview = previewSequence && points === unsavedPoints
 
       // Draw path lines
-      ctx.strokeStyle = isPreview ? "#8b5cf6" : hasUnsavedChanges ? "#f59e0b" : "#3b82f6"
+      // Black lines for normal mode (not preview, not unsaved changes)
+      ctx.strokeStyle = isPreview
+        ? "#8b5cf6"
+        : hasUnsavedChanges
+        ? "#f59e0b"
+        : "#000000" // Black for normal mode
       ctx.lineWidth = isPreview ? 3 : hasUnsavedChanges ? 3 : 2
       ctx.setLineDash(isPreview ? [10, 5] : hasUnsavedChanges ? [5, 5] : [])
       ctx.beginPath()
@@ -190,7 +198,8 @@ export function DrawingCanvas({
         if (!isFrontView) {
           ctx.fillStyle = "#374151"
           ctx.font = "9px sans-serif"
-          ctx.fillText(`${point.z}m`, x, y - 12)
+          // Round altitude to 2 digits, no decimals
+          ctx.fillText(`${Math.round(point.z)}m`, x, y - 12)
         }
       })
 
@@ -259,6 +268,11 @@ export function DrawingCanvas({
     const x = rawX * scaleX
     const y = rawY * scaleY
 
+    // Assign timestamp based on order, not Date.now()
+    const interval = 1000 // ms between waypoints
+    const nextIndex = unsavedPoints.length
+    const newTimestamp = nextIndex * interval
+
     const newPoint: DronePoint = {
       x: x,
       y: isFrontView ? canvasHeight / 2 : y, // Front view fixes Y at center
@@ -266,7 +280,7 @@ export function DrawingCanvas({
       color: currentColor,
       rgb: currentRgb,
       brightness: 0.8,
-      timestamp: Date.now(),
+      timestamp: newTimestamp,
       speed: 5,
       transitionDuration: 500,
     }
@@ -283,6 +297,7 @@ export function DrawingCanvas({
       title: "Canvas Cleared",
       description: "All waypoints have been removed",
     })
+    redrawCanvas() // Immediately clear both canvases
   }
 
   const saveSequence = () => {
@@ -295,11 +310,16 @@ export function DrawingCanvas({
       return
     }
 
+    // Ensure all timestamps are sequential and duration is correct
+    const interval = 1000 // ms between waypoints
+    const pointsWithTimestamps = unsavedPoints.map((p, i) => ({ ...p, timestamp: i * interval }))
+    const duration = pointsWithTimestamps.length > 0 ? (pointsWithTimestamps.length - 1) * interval + interval : 0
+
     const newSequence: DroneSequence = {
       id: sequence?.id || Date.now().toString(),
       name: sequenceName,
-      points: [...unsavedPoints],
-      duration: unsavedPoints.length > 0 ? Math.max(...unsavedPoints.map((p) => p.timestamp)) + 1000 : 0,
+      points: pointsWithTimestamps,
+      duration,
     }
 
     if (sequence) {
@@ -321,13 +341,59 @@ export function DrawingCanvas({
   }
 
   const createNewSequence = () => {
+    // Just open the dialog for naming the new route
+    setNewRouteName("")
+    setShowNameDialog(true)
+  }
+
+  const handleNameDialogSave = () => {
+    // Save current route if there are unsaved points
+    if (unsavedPoints.length > 0) {
+      const interval = 1000
+      const pointsWithTimestamps = unsavedPoints.map((p, i) => ({ ...p, timestamp: i * interval }))
+      const duration = pointsWithTimestamps.length > 0 ? (pointsWithTimestamps.length - 1) * interval + interval : 0
+      const newSequence: DroneSequence = {
+        id: sequence?.id || Date.now().toString(),
+        name: sequenceName,
+        points: pointsWithTimestamps,
+        duration,
+      }
+      if (sequence) {
+        onSequenceUpdate(newSequence)
+        toast({
+          title: "Sequence Updated",
+          description: `"${sequenceName}" has been saved with ${unsavedPoints.length} waypoints`,
+        })
+      } else {
+        onNewSequence(newSequence)
+        toast({
+          title: "New Sequence Created",
+          description: `"${sequenceName}" has been saved with ${unsavedPoints.length} waypoints`,
+        })
+      }
+    }
+    // Now create and select the new empty route
+    const name = newRouteName.trim() || "New Sequence"
+    const newId = Date.now().toString()
+    onNewSequence({
+      id: newId,
+      name,
+      points: [],
+      duration: 0,
+    })
+    if (typeof window !== "undefined" && window.dispatchEvent) {
+      // Custom event to notify parent to select the new route
+      window.dispatchEvent(new CustomEvent("select-drone-sequence", { detail: { id: newId } }))
+    }
+    setSequenceName(name)
     setUnsavedPoints([])
-    setSequenceName("New Sequence")
     setHasUnsavedChanges(false)
+    setShowNameDialog(false)
     onClearPreview?.()
+    redrawCanvas()
     toast({
       title: "New Sequence Started",
-      description: "Ready to create a new flight path",
+      description: `Route "${name}" created. Ready to add waypoints.`,
     })
   }
 
@@ -342,6 +408,24 @@ export function DrawingCanvas({
 
   return (
     <div className="space-y-4">
+      {/* Name new route dialog */}
+      <Dialog open={showNameDialog} onOpenChange={setShowNameDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Name Your New Route</DialogTitle>
+          </DialogHeader>
+          <Input
+            autoFocus
+            placeholder="Enter route name"
+            value={newRouteName}
+            onChange={e => setNewRouteName(e.target.value)}
+            className="mt-2"
+          />
+          <DialogFooter>
+            <Button onClick={handleNameDialogSave} disabled={!newRouteName.trim()}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-4 p-4 bg-gray-50 rounded-lg">
         <div className="flex items-center gap-2">
@@ -452,30 +536,44 @@ export function DrawingCanvas({
           <CardTitle className="text-sm">Sequence Information</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="font-medium">Waypoints:</span> {unsavedPoints.length}
+          <div className="divide-y divide-gray-200">
+            <div className="flex items-center justify-between py-2">
+              <span className="font-medium text-gray-700">Waypoints</span>
+              <span className="text-gray-900 font-mono">{unsavedPoints.length}</span>
             </div>
-            <div>
-              <span className="font-medium">Status:</span>
+            <div className="flex items-center justify-between py-2">
+              <span className="font-medium text-gray-700">Status</span>
               <span
                 className={
                   isPreviewMode
-                    ? "text-purple-600 ml-1"
+                    ? "text-purple-600 font-semibold"
                     : hasUnsavedChanges
-                      ? "text-orange-600 ml-1"
-                      : "text-green-600 ml-1"
+                    ? "text-orange-600 font-semibold"
+                    : "text-green-600 font-semibold"
                 }
               >
                 {isPreviewMode ? "Preview" : hasUnsavedChanges ? "Unsaved" : "Saved"}
               </span>
             </div>
-            <div>
-              <span className="font-medium">Max Altitude:</span>{" "}
-              {unsavedPoints.length > 0 ? Math.max(...unsavedPoints.map((p) => p.z)).toFixed(1) : 0}m
+            <div className="flex items-center justify-between py-2">
+              <span className="font-medium text-gray-700">Max Altitude</span>
+              <span className="text-gray-900 font-mono">{unsavedPoints.length > 0 ? Math.max(...unsavedPoints.map((p) => p.z)).toFixed(1) : 0}m</span>
             </div>
-            <div>
-              <span className="font-medium">Colors:</span> {new Set(unsavedPoints.map((p) => p.color)).size}
+            <div className="flex items-center justify-between py-2">
+              <span className="font-medium text-gray-700">Colors Used</span>
+              <span className="flex -space-x-2">
+                {[...new Set(unsavedPoints.map((p) => p.color))].map((color, idx) => (
+                  <span
+                    key={color}
+                    className="inline-block w-5 h-5 rounded border border-gray-300"
+                    style={{ backgroundColor: color, zIndex: 10 - idx }}
+                    title={color}
+                  />
+                ))}
+                {new Set(unsavedPoints.map((p) => p.color)).size === 0 && (
+                  <span className="text-gray-400">—</span>
+                )}
+              </span>
             </div>
           </div>
         </CardContent>
