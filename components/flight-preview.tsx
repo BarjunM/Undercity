@@ -134,7 +134,7 @@ function FlightPath({ sequence, isActive }: { sequence: DroneSequence; isActive:
   )
 }
 
-// Light beam path with color gradient
+// Light beam path with color gradient using TubeGeometry for thick lines
 function LightBeamPath({ sequence }: { sequence: DroneSequence }) {
   const points = useMemo(
     () => sequence.points.map((p) => new THREE.Vector3((p.x - 200) / 20, p.z / 10, (p.y - 150) / 20)),
@@ -144,25 +144,38 @@ function LightBeamPath({ sequence }: { sequence: DroneSequence }) {
     () => sequence.points.map((p) => new THREE.Color(p.color)),
     [sequence.points]
   )
-  const lineRef = useRef<THREE.Line>(null)
-  useEffect(() => {
-    if (lineRef.current && points.length > 1) {
-      const geometry = new THREE.BufferGeometry().setFromPoints(points)
-      const colorArray = new Float32Array(points.length * 3)
-      colors.forEach((color, i) => {
-        color.toArray(colorArray, i * 3)
-      })
-      geometry.setAttribute("color", new THREE.BufferAttribute(colorArray, 3))
-      lineRef.current.geometry = geometry
+  
+  const tubeGeometry = useMemo(() => {
+    if (points.length < 2) return null
+    
+    const curve = new THREE.CatmullRomCurve3(points)
+    const tubeGeometry = new THREE.TubeGeometry(curve, points.length * 4, 0.075, 8, false)
+    
+    // Apply vertex colors
+    const colorArray = new Float32Array(tubeGeometry.attributes.position.count * 3)
+    const positions = tubeGeometry.attributes.position.array
+    
+    for (let i = 0; i < positions.length; i += 3) {
+      const t = (i / 3) / (positions.length / 3 - 1)
+      const colorIndex = Math.floor(t * (colors.length - 1))
+      const color = colors[Math.min(colorIndex, colors.length - 1)]
+      
+      colorArray[i] = color.r
+      colorArray[i + 1] = color.g
+      colorArray[i + 2] = color.b
     }
+    
+    tubeGeometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3))
+    return tubeGeometry
   }, [points, colors])
-  if (points.length < 2) return null
+  
+  if (points.length < 2 || !tubeGeometry) return null
+  
   return (
-    <line ref={lineRef}>
-      <bufferGeometry />
-      {/* Make the beam much thicker and easier to see */}
-      <lineBasicMaterial vertexColors linewidth={20} color="#fff" />
-    </line>
+    <mesh>
+      <primitive object={tubeGeometry} />
+      <meshBasicMaterial vertexColors transparent opacity={0.8} />
+    </mesh>
   )
 }
 
@@ -248,6 +261,50 @@ function SimpleLighting() {
   )
 }
 
+// Camera controller for follow and cinematic modes
+function CameraController({ 
+  dronePosition, 
+  mode, 
+  isPlaying 
+}: { 
+  dronePosition: [number, number, number]
+  mode: "orbit" | "follow" | "cinematic"
+  isPlaying: boolean
+}) {
+  useFrame((state) => {
+    if (mode === "follow" && isPlaying) {
+      // Follow mode: camera follows drone with offset
+      const [x, y, z] = dronePosition
+      const followOffset = 5
+      const heightOffset = 3
+      
+      // Smooth camera following
+      const targetPosition = new THREE.Vector3(
+        x - followOffset * Math.cos(state.clock.elapsedTime * 0.1),
+        y + heightOffset,
+        z - followOffset * Math.sin(state.clock.elapsedTime * 0.1)
+      )
+      
+      state.camera.position.lerp(targetPosition, 0.05)
+      state.camera.lookAt(x, y, z)
+    } else if (mode === "cinematic") {
+      // Cinematic mode: sweeping camera movements
+      const time = state.clock.elapsedTime * 0.2
+      const radius = 15
+      const height = 8 + Math.sin(time * 0.5) * 3
+      
+      state.camera.position.set(
+        Math.cos(time) * radius,
+        height,
+        Math.sin(time) * radius
+      )
+      state.camera.lookAt(0, 3, 0)
+    }
+  })
+  
+  return null
+}
+
 function Scene({
   sequences,
   activeSequence,
@@ -255,10 +312,12 @@ function Scene({
   selectedSequence,
   isPlaying,
   mode = 'normal',
+  cameraMode = 'orbit',
 }: FlightPreviewProps & {
   selectedSequence: string | null
   isPlaying: boolean
   mode?: 'normal' | 'lightbeam'
+  cameraMode?: 'orbit' | 'follow' | 'cinematic'
 }) {
   // New: Support for 'all' routes
   const isAllRoutes = selectedSequence === "__all__"
@@ -329,10 +388,19 @@ function Scene({
     return point.color
   }
 
+  const currentPosition = getCurrentPosition()
+
   return (
     <>
       <SimpleRoom />
       <SimpleLighting />
+      
+      {/* Camera controller for follow and cinematic modes */}
+      <CameraController 
+        dronePosition={currentPosition} 
+        mode={cameraMode} 
+        isPlaying={isPlaying} 
+      />
 
       {/* Flight Path or Light Beam */}
       {displaySequence && (
@@ -345,7 +413,7 @@ function Scene({
 
       {/* Drone */}
       {displaySequence && displaySequence.points.length > 0 && (
-        <DroneModel position={getCurrentPosition()} color={getCurrentColor()} isActive={isPlaying} />
+        <DroneModel position={currentPosition} color={getCurrentColor()} isActive={isPlaying} />
       )}
     </>
   )
@@ -518,6 +586,7 @@ export function FlightPreview({ sequences, activeSequence, currentTime }: Flight
               selectedSequence={sequences[routeIndex]?.id}
               isPlaying={isPlaying}
               mode={mode}
+              cameraMode={cameraMode}
             />
           ) : (
             <Scene
@@ -527,18 +596,20 @@ export function FlightPreview({ sequences, activeSequence, currentTime }: Flight
               selectedSequence={selectedSequence}
               isPlaying={isPlaying}
               mode={mode}
+              cameraMode={cameraMode}
             />
           )}
           <OrbitControls
-            enablePan={true}
+            enablePan={cameraMode === "orbit"}
             enableZoom={true}
-            enableRotate={true}
+            enableRotate={cameraMode === "orbit"}
             minDistance={3}
             maxDistance={25}
             maxPolarAngle={Math.PI / 2.2}
             autoRotate={cameraMode === "cinematic"}
             autoRotateSpeed={0.5}
             target={[0, 3, 0]}
+            enabled={cameraMode === "orbit"}
           />
         </Canvas>
       </div>
