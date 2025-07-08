@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { RgbColorPicker } from "@/components/rgb-color-picker"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { Settings, Zap, Sparkles, Circle, Infinity, SplineIcon as Spiral, Users } from "lucide-react"
+import { Settings, Zap, Sparkles, Circle, Infinity, SplineIcon as Spiral, Users, Star, Heart, Waves, Dna, Shuffle, Square, Triangle, Zap as Lightning, Sparkle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { DroneSequence, DronePoint } from "@/app/page"
 
@@ -198,6 +198,7 @@ export function SettingsPanel({ onColorChange, currentColor, onPreviewSequence }
         { x: CANVAS_CENTER_X - 20, y: CANVAS_CENTER_Y }, // Left wing
         { x: CANVAS_CENTER_X + 20, y: CANVAS_CENTER_Y }, // Right wing
         { x: CANVAS_CENTER_X - 35, y: CANVAS_CENTER_Y + 15 }, // Left rear
+        { x: CANVAS_CENTER_X + 35, y: CANVAS_CENTER_Y + 15 }, // Right rear
       ],
     ]
 
@@ -232,6 +233,448 @@ export function SettingsPanel({ onColorChange, currentColor, onPreviewSequence }
     onPreviewSequence?.(sequence)
     toast({
       title: "Formation Pattern Generated",
+      description: `Preview created with ${points.length} waypoints. Save to keep it.`,
+    })
+  }
+
+  const generateStarPattern = () => {
+    const points: DronePoint[] = []
+    const numPoints = 10
+    const outerRadius = 70
+    const innerRadius = 35
+    const altitude = 22
+
+    for (let i = 0; i < numPoints; i++) {
+      const angle = (i / numPoints) * 2 * Math.PI - Math.PI / 2
+      const radius = i % 2 === 0 ? outerRadius : innerRadius
+      const x = CANVAS_CENTER_X + Math.cos(angle) * radius
+      const y = CANVAS_CENTER_Y + Math.sin(angle) * radius
+
+      const hue = (i / numPoints) * 360
+      const color = `hsl(${hue}, 85%, 55%)`
+      const rgb = hslToRgb(hue, 85, 55)
+
+      points.push({
+        x,
+        y,
+        z: altitude + (i % 2 === 0 ? 5 : 0),
+        color,
+        rgb,
+        brightness: ledSettings.brightness / 100,
+        timestamp: i * 700,
+        speed: flightSettings.maxSpeed,
+        transitionDuration: ledSettings.transitionSpeed,
+      })
+    }
+
+    const sequence: DroneSequence = {
+      id: `star-preview-${Date.now()}`,
+      name: `Star Pattern ${new Date().toLocaleTimeString()}`,
+      points,
+      duration: points.length * 700,
+    }
+
+    onPreviewSequence?.(sequence)
+    toast({
+      title: "Star Pattern Generated",
+      description: `Preview created with ${points.length} waypoints. Save to keep it.`,
+    })
+  }
+
+  const generateHeartPattern = () => {
+    const points: DronePoint[] = []
+    const numPoints = 40
+    const scale = 2.5 // Reduced scale to fit better in canvas
+    const altitude = 25
+
+    for (let i = 0; i < numPoints; i++) {
+      const t = (i / numPoints) * 2 * Math.PI
+      
+      // Parametric heart equation
+      const heartX = 16 * Math.sin(t) ** 3
+      const heartY = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)
+      
+      // Scale and position the heart
+      const x = CANVAS_CENTER_X + heartX * scale
+      const y = CANVAS_CENTER_Y - heartY * scale // Flip Y to make heart upright
+
+      // Red to pink gradient with better color range
+      const progress = i / numPoints
+      const hue = 340 + progress * 40 // From deep red to pink
+      const saturation = 85 - progress * 15 // Slightly decrease saturation
+      const lightness = 50 + progress * 20 // Increase lightness for pink effect
+      const color = `hsl(${hue % 360}, ${saturation}%, ${lightness}%)`
+      const rgb = hslToRgb(hue % 360, saturation, lightness)
+
+      points.push({
+        x,
+        y,
+        z: altitude + Math.sin(t * 2) * 2, // Add slight altitude variation
+        color,
+        rgb,
+        brightness: ledSettings.brightness / 100,
+        timestamp: i * 400,
+        speed: flightSettings.maxSpeed * 0.6,
+        transitionDuration: ledSettings.transitionSpeed,
+      })
+    }
+
+    const sequence: DroneSequence = {
+      id: `heart-preview-${Date.now()}`,
+      name: `Heart Pattern ${new Date().toLocaleTimeString()}`,
+      points,
+      duration: points.length * 400,
+    }
+
+    onPreviewSequence?.(sequence)
+    toast({
+      title: "Heart Pattern Generated",
+      description: `Preview created with ${points.length} waypoints. Save to keep it.`,
+    })
+  }
+
+  const generateWavePattern = () => {
+    const points: DronePoint[] = []
+    const numPoints = 25
+    const waveWidth = 120
+    const waveHeight = 40
+    const altitude = 18
+
+    for (let i = 0; i < numPoints; i++) {
+      const progress = i / (numPoints - 1)
+      const x = CANVAS_CENTER_X - waveWidth / 2 + progress * waveWidth
+      const y = CANVAS_CENTER_Y + Math.sin(progress * 4 * Math.PI) * waveHeight
+
+      // Blue to cyan wave colors
+      const hue = 180 + Math.sin(progress * 4 * Math.PI) * 60
+      const color = `hsl(${hue}, 70%, 55%)`
+      const rgb = hslToRgb(hue, 70, 55)
+
+      points.push({
+        x,
+        y,
+        z: altitude + Math.sin(progress * 2 * Math.PI) * 8,
+        color,
+        rgb,
+        brightness: ledSettings.brightness / 100,
+        timestamp: i * 400,
+        speed: flightSettings.maxSpeed,
+        transitionDuration: ledSettings.transitionSpeed,
+      })
+    }
+
+    const sequence: DroneSequence = {
+      id: `wave-preview-${Date.now()}`,
+      name: `Wave Pattern ${new Date().toLocaleTimeString()}`,
+      points,
+      duration: points.length * 400,
+    }
+
+    onPreviewSequence?.(sequence)
+    toast({
+      title: "Wave Pattern Generated",
+      description: `Preview created with ${points.length} waypoints. Save to keep it.`,
+    })
+  }
+
+  const generateHelixPattern = () => {
+    const points: DronePoint[] = []
+    const numPoints = 30
+    const radius = 50
+    const height = 35
+    const turns = 3
+
+    for (let i = 0; i < numPoints; i++) {
+      const progress = i / (numPoints - 1)
+      const angle = progress * turns * 2 * Math.PI
+      const x = CANVAS_CENTER_X + Math.cos(angle) * radius * (1 - progress * 0.5)
+      const y = CANVAS_CENTER_Y + Math.sin(angle) * radius * (1 - progress * 0.5)
+      const z = 10 + progress * height
+
+      // Rainbow spiral colors
+      const hue = progress * 720 % 360
+      const color = `hsl(${hue}, 80%, 60%)`
+      const rgb = hslToRgb(hue, 80, 60)
+
+      points.push({
+        x,
+        y,
+        z,
+        color,
+        rgb,
+        brightness: ledSettings.brightness / 100,
+        timestamp: i * 300,
+        speed: flightSettings.maxSpeed * 0.8,
+        transitionDuration: ledSettings.transitionSpeed,
+      })
+    }
+
+    const sequence: DroneSequence = {
+      id: `helix-preview-${Date.now()}`,
+      name: `Helix Pattern ${new Date().toLocaleTimeString()}`,
+      points,
+      duration: points.length * 300,
+    }
+
+    onPreviewSequence?.(sequence)
+    toast({
+      title: "Helix Pattern Generated",
+      description: `Preview created with ${points.length} waypoints. Save to keep it.`,
+    })
+  }
+
+  const generateRandomPattern = () => {
+    const points: DronePoint[] = []
+    const numPoints = 15
+    const maxRadius = 80
+    const minAltitude = 10
+    const maxAltitude = 40
+
+    for (let i = 0; i < numPoints; i++) {
+      const angle = Math.random() * 2 * Math.PI
+      const radius = Math.random() * maxRadius
+      const x = CANVAS_CENTER_X + Math.cos(angle) * radius
+      const y = CANVAS_CENTER_Y + Math.sin(angle) * radius
+      const z = minAltitude + Math.random() * (maxAltitude - minAltitude)
+
+      const hue = Math.random() * 360
+      const color = `hsl(${hue}, 70%, 55%)`
+      const rgb = hslToRgb(hue, 70, 55)
+
+      points.push({
+        x,
+        y,
+        z,
+        color,
+        rgb,
+        brightness: ledSettings.brightness / 100,
+        timestamp: i * 800,
+        speed: flightSettings.maxSpeed,
+        transitionDuration: ledSettings.transitionSpeed,
+      })
+    }
+
+    const sequence: DroneSequence = {
+      id: `random-preview-${Date.now()}`,
+      name: `Random Pattern ${new Date().toLocaleTimeString()}`,
+      points,
+      duration: points.length * 800,
+    }
+
+    onPreviewSequence?.(sequence)
+    toast({
+      title: "Random Pattern Generated",
+      description: `Preview created with ${points.length} waypoints. Save to keep it.`,
+    })
+  }
+
+  const generateSquarePattern = () => {
+    const points: DronePoint[] = []
+    const sideLength = 80
+    const pointsPerSide = 6
+    const altitude = 20
+
+    // Generate square perimeter
+    for (let side = 0; side < 4; side++) {
+      for (let i = 0; i < pointsPerSide; i++) {
+        let x = CANVAS_CENTER_X
+        let y = CANVAS_CENTER_Y
+        const progress = i / (pointsPerSide - 1)
+
+        switch (side) {
+          case 0: // Top side
+            x = CANVAS_CENTER_X - sideLength / 2 + progress * sideLength
+            y = CANVAS_CENTER_Y - sideLength / 2
+            break
+          case 1: // Right side
+            x = CANVAS_CENTER_X + sideLength / 2
+            y = CANVAS_CENTER_Y - sideLength / 2 + progress * sideLength
+            break
+          case 2: // Bottom side
+            x = CANVAS_CENTER_X + sideLength / 2 - progress * sideLength
+            y = CANVAS_CENTER_Y + sideLength / 2
+            break
+          case 3: // Left side
+            x = CANVAS_CENTER_X - sideLength / 2
+            y = CANVAS_CENTER_Y + sideLength / 2 - progress * sideLength
+            break
+        }
+
+        const hue = (side * 90 + progress * 60) % 360
+        const color = `hsl(${hue}, 75%, 55%)`
+        const rgb = hslToRgb(hue, 75, 55)
+
+        points.push({
+          x,
+          y,
+          z: altitude,
+          color,
+          rgb,
+          brightness: ledSettings.brightness / 100,
+          timestamp: (side * pointsPerSide + i) * 300,
+          speed: flightSettings.maxSpeed,
+          transitionDuration: ledSettings.transitionSpeed,
+        })
+      }
+    }
+
+    const sequence: DroneSequence = {
+      id: `square-preview-${Date.now()}`,
+      name: `Square Pattern ${new Date().toLocaleTimeString()}`,
+      points,
+      duration: points.length * 300,
+    }
+
+    onPreviewSequence?.(sequence)
+    toast({
+      title: "Square Pattern Generated",
+      description: `Preview created with ${points.length} waypoints. Save to keep it.`,
+    })
+  }
+
+  const generateTrianglePattern = () => {
+    const points: DronePoint[] = []
+    const sideLength = 90
+    const pointsPerSide = 5
+    const altitude = 22
+
+    // Triangle vertices
+    const vertices = [
+      { x: CANVAS_CENTER_X, y: CANVAS_CENTER_Y - sideLength * 0.6 }, // Top
+      { x: CANVAS_CENTER_X - sideLength / 2, y: CANVAS_CENTER_Y + sideLength * 0.3 }, // Bottom left
+      { x: CANVAS_CENTER_X + sideLength / 2, y: CANVAS_CENTER_Y + sideLength * 0.3 }, // Bottom right
+    ]
+
+    for (let side = 0; side < 3; side++) {
+      const startVertex = vertices[side]
+      const endVertex = vertices[(side + 1) % 3]
+
+      for (let i = 0; i < pointsPerSide; i++) {
+        const progress = i / (pointsPerSide - 1)
+        const x = startVertex.x + (endVertex.x - startVertex.x) * progress
+        const y = startVertex.y + (endVertex.y - startVertex.y) * progress
+
+        const hue = (side * 120 + progress * 80) % 360
+        const color = `hsl(${hue}, 80%, 60%)`
+        const rgb = hslToRgb(hue, 80, 60)
+
+        points.push({
+          x,
+          y,
+          z: altitude + Math.sin(progress * Math.PI) * 5,
+          color,
+          rgb,
+          brightness: ledSettings.brightness / 100,
+          timestamp: (side * pointsPerSide + i) * 400,
+          speed: flightSettings.maxSpeed,
+          transitionDuration: ledSettings.transitionSpeed,
+        })
+      }
+    }
+
+    const sequence: DroneSequence = {
+      id: `triangle-preview-${Date.now()}`,
+      name: `Triangle Pattern ${new Date().toLocaleTimeString()}`,
+      points,
+      duration: points.length * 400,
+    }
+
+    onPreviewSequence?.(sequence)
+    toast({
+      title: "Triangle Pattern Generated",
+      description: `Preview created with ${points.length} waypoints. Save to keep it.`,
+    })
+  }
+
+  const generateZigzagPattern = () => {
+    const points: DronePoint[] = []
+    const numZigs = 6
+    const zigWidth = 100
+    const zigHeight = 60
+    const altitude = 16
+
+    for (let i = 0; i <= numZigs; i++) {
+      const isEven = i % 2 === 0
+      const x = CANVAS_CENTER_X - zigWidth / 2 + (i / numZigs) * zigWidth
+      const y = CANVAS_CENTER_Y + (isEven ? -zigHeight / 2 : zigHeight / 2)
+
+      const hue = (i / numZigs) * 240 + 120 // Blue to green gradient
+      const color = `hsl(${hue}, 75%, 55%)`
+      const rgb = hslToRgb(hue, 75, 55)
+
+      points.push({
+        x,
+        y,
+        z: altitude + Math.sin((i / numZigs) * Math.PI * 2) * 6,
+        color,
+        rgb,
+        brightness: ledSettings.brightness / 100,
+        timestamp: i * 600,
+        speed: flightSettings.maxSpeed,
+        transitionDuration: ledSettings.transitionSpeed,
+      })
+    }
+
+    const sequence: DroneSequence = {
+      id: `zigzag-preview-${Date.now()}`,
+      name: `Zigzag Pattern ${new Date().toLocaleTimeString()}`,
+      points,
+      duration: points.length * 600,
+    }
+
+    onPreviewSequence?.(sequence)
+    toast({
+      title: "Zigzag Pattern Generated",
+      description: `Preview created with ${points.length} waypoints. Save to keep it.`,
+    })
+  }
+
+  const generateBurstPattern = () => {
+    const points: DronePoint[] = []
+    const numRays = 8
+    const rayLength = 70
+    const pointsPerRay = 4
+    const altitude = 25
+
+    for (let ray = 0; ray < numRays; ray++) {
+      const angle = (ray / numRays) * 2 * Math.PI
+      
+      for (let i = 0; i < pointsPerRay; i++) {
+        const progress = (i + 1) / pointsPerRay // Start from center and go outward
+        const radius = progress * rayLength
+        const x = CANVAS_CENTER_X + Math.cos(angle) * radius
+        const y = CANVAS_CENTER_Y + Math.sin(angle) * radius
+
+        const hue = (ray / numRays) * 360
+        const saturation = 60 + progress * 30
+        const lightness = 50 + progress * 20
+        const color = `hsl(${hue}, ${saturation}%, ${lightness}%)`
+        const rgb = hslToRgb(hue, saturation, lightness)
+
+        points.push({
+          x,
+          y,
+          z: altitude - progress * 10, // Descend as it moves outward
+          color,
+          rgb,
+          brightness: (ledSettings.brightness / 100) * (1.2 - progress * 0.4),
+          timestamp: ray * 800 + i * 200,
+          speed: flightSettings.maxSpeed * (0.5 + progress * 0.5),
+          transitionDuration: ledSettings.transitionSpeed,
+        })
+      }
+    }
+
+    const sequence: DroneSequence = {
+      id: `burst-preview-${Date.now()}`,
+      name: `Burst Pattern ${new Date().toLocaleTimeString()}`,
+      points,
+      duration: numRays * 800 + pointsPerRay * 200,
+    }
+
+    onPreviewSequence?.(sequence)
+    toast({
+      title: "Burst Pattern Generated",
       description: `Preview created with ${points.length} waypoints. Save to keep it.`,
     })
   }
@@ -447,25 +890,86 @@ export function SettingsPanel({ onColorChange, currentColor, onPreviewSequence }
           <CardDescription>Generate common flight patterns for preview</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Button onClick={generateCirclePattern} variant="outline" className="w-full justify-start bg-transparent">
-            <Circle className="w-4 h-4 mr-2" />
-            Circle Pattern
-          </Button>
+          {/* Basic Patterns */}
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Basic Patterns</div>
+            <Button onClick={generateCirclePattern} variant="outline" className="w-full justify-start bg-transparent">
+              <Circle className="w-4 h-4 mr-2" />
+              Circle Pattern
+            </Button>
 
-          <Button onClick={generateFigure8Pattern} variant="outline" className="w-full justify-start bg-transparent">
-            <Infinity className="w-4 h-4 mr-2" />
-            Figure-8 Pattern
-          </Button>
+            <Button onClick={generateSquarePattern} variant="outline" className="w-full justify-start bg-transparent">
+              <Square className="w-4 h-4 mr-2" />
+              Square Pattern
+            </Button>
 
-          <Button onClick={generateSpiralPattern} variant="outline" className="w-full justify-start bg-transparent">
-            <Spiral className="w-4 h-4 mr-2" />
-            Spiral Pattern
-          </Button>
+            <Button onClick={generateTrianglePattern} variant="outline" className="w-full justify-start bg-transparent">
+              <Triangle className="w-4 h-4 mr-2" />
+              Triangle Pattern
+            </Button>
 
-          <Button onClick={generateFormationPattern} variant="outline" className="w-full justify-start bg-transparent">
-            <Users className="w-4 h-4 mr-2" />
-            Formation Flying
-          </Button>
+            <Button onClick={generateStarPattern} variant="outline" className="w-full justify-start bg-transparent">
+              <Star className="w-4 h-4 mr-2" />
+              Star Pattern
+            </Button>
+          </div>
+
+          <Separator />
+
+          {/* Advanced Patterns */}
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Advanced Patterns</div>
+            <Button onClick={generateFigure8Pattern} variant="outline" className="w-full justify-start bg-transparent">
+              <Infinity className="w-4 h-4 mr-2" />
+              Figure-8 Pattern
+            </Button>
+
+            <Button onClick={generateSpiralPattern} variant="outline" className="w-full justify-start bg-transparent">
+              <Spiral className="w-4 h-4 mr-2" />
+              Spiral Pattern
+            </Button>
+
+            <Button onClick={generateHelixPattern} variant="outline" className="w-full justify-start bg-transparent">
+              <Dna className="w-4 h-4 mr-2" />
+              Helix Pattern
+            </Button>
+
+            <Button onClick={generateWavePattern} variant="outline" className="w-full justify-start bg-transparent">
+              <Waves className="w-4 h-4 mr-2" />
+              Wave Pattern
+            </Button>
+
+            <Button onClick={generateZigzagPattern} variant="outline" className="w-full justify-start bg-transparent">
+              <Lightning className="w-4 h-4 mr-2" />
+              Zigzag Pattern
+            </Button>
+          </div>
+
+          <Separator />
+
+          {/* Creative Patterns */}
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Creative Patterns</div>
+            <Button onClick={generateHeartPattern} variant="outline" className="w-full justify-start bg-transparent">
+              <Heart className="w-4 h-4 mr-2" />
+              Heart Pattern
+            </Button>
+
+            <Button onClick={generateBurstPattern} variant="outline" className="w-full justify-start bg-transparent">
+              <Sparkle className="w-4 h-4 mr-2" />
+              Burst Pattern
+            </Button>
+
+            <Button onClick={generateFormationPattern} variant="outline" className="w-full justify-start bg-transparent">
+              <Users className="w-4 h-4 mr-2" />
+              Formation Flying
+            </Button>
+
+            <Button onClick={generateRandomPattern} variant="outline" className="w-full justify-start bg-transparent">
+              <Shuffle className="w-4 h-4 mr-2" />
+              Random Pattern
+            </Button>
+          </div>
 
           <Separator />
 

@@ -101,26 +101,28 @@ export function DrawingCanvas({
 
     // Draw altitude reference lines for front view
     if (isFrontView) {
-      ctx.strokeStyle = "#fbbf24"
-      ctx.lineWidth = 1
-      ctx.setLineDash([5, 5])
+      ctx.strokeStyle = "#a3a3a3"; // Slightly darker gray for dotted lines
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
 
       // Draw altitude lines every 10m (every 30 pixels)
       for (let alt = 10; alt <= 100; alt += 10) {
-        const y = height - alt * 3 // 3 pixels per meter
+        const y = height - alt * 3; // 3 pixels per meter
         if (y > 0) {
-          ctx.beginPath()
-          ctx.moveTo(0, y)
-          ctx.lineTo(width, y)
-          ctx.stroke()
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
 
-          // Label altitude
-          ctx.fillStyle = "#f59e0b"
-          ctx.font = "10px sans-serif"
-          ctx.fillText(`${alt}m`, 5, y - 2)
+          // Label altitude (left-aligned, all dark grey)
+          ctx.fillStyle = "#374151"; // Tailwind gray-700 for all text
+          ctx.font = "10px monospace";
+          ctx.textAlign = "left";
+          ctx.fillText(`${alt} m`, 8, y - 2);
         }
       }
-      ctx.setLineDash([])
+      ctx.setLineDash([]);
+      ctx.textAlign = "start";
     }
 
     // Labels
@@ -128,17 +130,9 @@ export function DrawingCanvas({
     ctx.font = "12px sans-serif"
 
     if (isFrontView) {
-      ctx.fillText("Front View (X-Z)", 10, 20)
-      ctx.fillText("Left", 10, height - 10)
       ctx.fillText("Right", width - 35, height - 10)
       ctx.fillText("Up", width - 20, 15)
-    } else {
-      ctx.fillText("Bird's Eye View (X-Y)", 10, 20)
-      ctx.fillText("West", 10, height - 10)
-      ctx.fillText("East", width - 25, height - 10)
-      ctx.fillText("North", width - 30, 15)
-      ctx.fillText("South", 10, height / 2 + 15)
-    }
+    } // Cardinal direction labels for bird's eye view have been removed
   }, [])
 
   const drawWaypoints = useCallback(
@@ -153,7 +147,7 @@ export function DrawingCanvas({
       ctx.strokeStyle = isPreview
         ? "#8b5cf6"
         : hasUnsavedChanges
-        ? "#f59e0b"
+        ? "#fb923c" // Orange-500 for unsaved modifications (matches button)
         : "#000000" // Black for normal mode
       ctx.lineWidth = isPreview ? 3 : hasUnsavedChanges ? 3 : 2
       ctx.setLineDash(isPreview ? [10, 5] : hasUnsavedChanges ? [5, 5] : [])
@@ -183,10 +177,12 @@ export function DrawingCanvas({
         ctx.arc(x, y, 8, 0, 2 * Math.PI)
         ctx.fill()
 
-        // Border - purple if preview, orange if unsaved, white if saved
-        ctx.strokeStyle = isPreview ? "#8b5cf6" : hasUnsavedChanges ? "#f59e0b" : "#ffffff"
-        ctx.lineWidth = 2
-        ctx.stroke()
+        // Only draw border if preview or unsaved changes
+        if (isPreview || hasUnsavedChanges) {
+          ctx.strokeStyle = isPreview ? "#8b5cf6" : hasUnsavedChanges ? "#fb923c" : "#ffffff"
+          ctx.lineWidth = 2
+          ctx.stroke()
+        }
 
         // Waypoint number
         ctx.fillStyle = "#ffffff"
@@ -194,12 +190,16 @@ export function DrawingCanvas({
         ctx.textAlign = "center"
         ctx.fillText((index + 1).toString(), x, y + 3)
 
-        // Altitude label for bird's eye view
-        if (!isFrontView) {
-          ctx.fillStyle = "#374151"
+        // Altitude label for bird's eye view and front view (only last point)
+        if (!isFrontView && index === points.length - 1) {
+          ctx.fillStyle = "#000000" // Black for last waypoint altitude
           ctx.font = "9px sans-serif"
-          // Round altitude to 2 digits, no decimals
           ctx.fillText(`${Math.round(point.z)}m`, x, y - 12)
+        }
+        if (isFrontView && index === points.length - 1) {
+          ctx.fillStyle = "#000000" // Black for last waypoint altitude
+          ctx.font = "9px sans-serif"
+          ctx.fillText(`${Math.round(point.z)}m`, x + 18, y + 4)
         }
       })
 
@@ -426,154 +426,246 @@ export function DrawingCanvas({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* Controls */}
-      <div className="flex flex-wrap items-center gap-4 p-4 bg-gray-50 rounded-lg">
-        <div className="flex items-center gap-2">
-          <Label htmlFor="sequence-name">Sequence Name:</Label>
-          <Input
-            id="sequence-name"
-            value={sequenceName}
-            onChange={(e) => handleSequenceNameChange(e.target.value)}
-            className="w-40"
-          />
+      {/* Controls Section */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Sequence Name */}
+          <div className="flex items-center gap-2 min-w-0">
+            <Label htmlFor="sequence-name" className="text-sm font-semibold text-gray-700 whitespace-nowrap">
+              Route Name:
+            </Label>
+            <Input
+              id="sequence-name"
+              value={sequenceName}
+              onChange={(e) => handleSequenceNameChange(e.target.value)}
+              className="w-48 border-gray-300 focus:border-purple-500 focus:ring-purple-500"
+              placeholder="Enter route name..."
+            />
+          </div>
+
+          {/* Altitude Control */}
+          <div className="flex items-center gap-3">
+            <Label htmlFor="altitude" className="text-sm font-semibold text-gray-700 whitespace-nowrap">
+              Altitude:
+            </Label>
+            <div className="flex items-center gap-2">
+              <Slider
+                id="altitude"
+                min={1}
+                max={100}
+                step={1}
+                value={[currentAltitude]}
+                onValueChange={(value) => setCurrentAltitude(value[0])}
+                className="w-24"
+              />
+              <div className="bg-white border border-gray-300 rounded px-2 py-1 min-w-[3rem] text-center">
+                <span className="text-sm font-mono font-semibold text-gray-800">{currentAltitude}m</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 ml-auto">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setShowWaypoints(!showWaypoints)}
+              className="border-gray-300 hover:border-gray-400"
+            >
+              <Eye className="w-4 h-4 mr-2" />
+              {showWaypoints ? "Hide" : "Show"} Points
+            </Button>
+
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={createNewSequence}
+              className="border-green-300 hover:border-green-400 text-green-700 hover:text-green-800 hover:bg-green-50"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Route
+            </Button>
+
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={clearCanvas}
+              className="border-red-300 hover:border-red-400 text-red-700 hover:text-red-800 hover:bg-red-50"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Clear
+            </Button>
+
+            <Button
+              onClick={saveSequence}
+              size="sm"
+              disabled={!hasUnsavedChanges && unsavedPoints.length === 0}
+              className={`min-w-[120px] ${
+                isPreviewMode
+                  ? "bg-purple-600 hover:bg-purple-700 border-purple-600"
+                  : hasUnsavedChanges
+                  ? "bg-orange-500 hover:bg-orange-600 border-orange-500"
+                  : "bg-blue-600 hover:bg-blue-700"
+              }`}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {isPreviewMode ? "Save Preview" : hasUnsavedChanges ? "Save Changes" : "Save Route"}
+            </Button>
+          </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Label htmlFor="altitude">Altitude (m):</Label>
-          <Slider
-            id="altitude"
-            min={1}
-            max={100}
-            step={1}
-            value={[currentAltitude]}
-            onValueChange={(value) => setCurrentAltitude(value[0])}
-            className="w-32"
-          />
-          <span className="text-sm font-medium w-8">{currentAltitude}</span>
-        </div>
-
-        <Button variant="outline" size="sm" onClick={() => setShowWaypoints(!showWaypoints)}>
-          <Eye className="w-4 h-4 mr-2" />
-          {showWaypoints ? "Hide" : "Show"} Points
-        </Button>
-
-        <Button variant="outline" size="sm" onClick={createNewSequence}>
-          <Plus className="w-4 h-4 mr-2" />
-          New
-        </Button>
-
-        <Button variant="destructive" size="sm" onClick={clearCanvas}>
-          <Trash2 className="w-4 h-4 mr-2" />
-          Clear
-        </Button>
-
-        <Button
-          onClick={saveSequence}
-          size="sm"
-          disabled={!hasUnsavedChanges && unsavedPoints.length === 0}
-          className={hasUnsavedChanges || isPreviewMode ? "bg-orange-600 hover:bg-orange-700" : ""}
-        >
-          <Save className="w-4 h-4 mr-2" />
-          {isPreviewMode ? "Save Preview" : hasUnsavedChanges ? "Save Changes" : "Save Sequence"}
-        </Button>
       </div>
 
-      {(hasUnsavedChanges || isPreviewMode) && (
-        <div
-          className={`border rounded-lg p-3 ${isPreviewMode ? "bg-purple-50 border-purple-200" : "bg-orange-50 border-orange-200"}`}
-        >
-          <p className={`text-sm ${isPreviewMode ? "text-purple-800" : "text-orange-800"}`}>
-            <strong>{isPreviewMode ? "Preview Mode:" : "Unsaved Changes:"}</strong>{" "}
-            {isPreviewMode
-              ? `Previewing ${unsavedPoints.length} waypoints from quick action. Click Save to keep it.`
-              : `You have ${unsavedPoints.length} waypoints that haven't been saved yet.`}
-          </p>
-        </div>
-      )}
-
-      {/* Side-by-Side Canvas Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Bird's Eye View - Left */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Bird's Eye View</CardTitle>
-            <CardDescription>Top-down view for horizontal path planning</CardDescription>
+      {/* Canvas Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Bird's Eye View */}
+        <Card className="border border-gray-200 bg-white/90 shadow-lg rounded-2xl transition-all">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2 tracking-tight">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              Bird's Eye View
+            </CardTitle>
+            <CardDescription className="text-xs text-gray-500 font-medium">
+              Top-down view for horizontal path planning • Altitude: <span className="font-semibold text-gray-700">{currentAltitude}m</span>
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
             <canvas
               ref={birdEyeCanvasRef}
               width={canvasWidth}
               height={canvasHeight}
-              className="border border-gray-300 rounded cursor-crosshair bg-white w-full"
+              className="border border-gray-200 rounded-lg cursor-crosshair bg-white w-full shadow-inner hover:shadow-lg transition-shadow duration-200"
               onClick={(e) => handleCanvasClick(e, false)}
             />
-            <p className="text-xs text-gray-500 mt-2">Click to add waypoints. Altitude: {currentAltitude}m</p>
+            <div className="flex items-center justify-between text-xs text-gray-400 font-medium">
+              <span>Click to add waypoints</span>
+              <span className="bg-gray-100 px-2 py-1 rounded-full">XY Plane</span>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Front View - Right */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Front View</CardTitle>
-            <CardDescription>Side profile for altitude planning</CardDescription>
+        {/* Front View */}
+        <Card className="border border-gray-200 bg-white/90 shadow-lg rounded-2xl transition-all">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2 tracking-tight">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+              </svg>
+              Side Profile View
+            </CardTitle>
+            <CardDescription className="text-xs text-gray-500 font-medium">
+              Side view for altitude planning • Y-axis controls height
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
             <canvas
               ref={frontViewCanvasRef}
               width={canvasWidth}
               height={canvasHeight}
-              className="border border-gray-300 rounded cursor-crosshair bg-white w-full"
+              className="border border-gray-200 rounded-lg cursor-crosshair bg-white w-full shadow-inner hover:shadow-lg transition-shadow duration-200"
               onClick={(e) => handleCanvasClick(e, true)}
             />
-            <p className="text-xs text-gray-500 mt-2">Click to add waypoints with altitude control</p>
+            <div className="flex items-center justify-between text-xs text-gray-400 font-medium">
+              <span>Click to set altitude directly</span>
+              <span className="bg-gray-100 px-2 py-1 rounded-full">XZ Plane</span>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Sequence Info */}
-      <Card>
+      {/* Enhanced Sequence Statistics */}
+      <Card className="border border-gray-200 bg-white/90 shadow-lg rounded-2xl mt-8">
         <CardHeader>
-          <CardTitle className="text-sm">Sequence Information</CardTitle>
+          <CardTitle className="text-base font-semibold text-gray-900 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 00-2-2z" />
+              </svg>
+              Route Statistics
+            </div>
+            <div className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+              isPreviewMode
+                ? "bg-purple-50 border-purple-200 text-purple-700"
+                : hasUnsavedChanges
+                ? "bg-orange-50 border-orange-200 text-orange-700"
+                : "bg-green-50 border-green-200 text-green-700"
+            }`}>
+              {isPreviewMode ? "Preview" : hasUnsavedChanges ? "Modified" : "Saved"}
+            </div>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="divide-y divide-gray-200">
-            <div className="flex items-center justify-between py-2">
-              <span className="font-medium text-gray-700">Waypoints</span>
-              <span className="text-gray-900 font-mono">{unsavedPoints.length}</span>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Waypoints */}
+            <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex flex-col items-start gap-1 min-w-[120px]">
+              <div className="flex items-center gap-2 mb-1">
+                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span className="text-xs font-medium text-gray-500">Waypoints</span>
+              </div>
+              <div className="text-xl font-bold text-gray-900">{unsavedPoints.length}</div>
             </div>
-            <div className="flex items-center justify-between py-2">
-              <span className="font-medium text-gray-700">Status</span>
-              <span
-                className={
-                  isPreviewMode
-                    ? "text-purple-600 font-semibold"
-                    : hasUnsavedChanges
-                    ? "text-orange-600 font-semibold"
-                    : "text-green-600 font-semibold"
-                }
-              >
-                {isPreviewMode ? "Preview" : hasUnsavedChanges ? "Unsaved" : "Saved"}
-              </span>
+            {/* Max Altitude */}
+            <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex flex-col items-start gap-1 min-w-[120px]">
+              <div className="flex items-center gap-2 mb-1">
+                <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4" />
+                </svg>
+                <span className="text-xs font-medium text-gray-500">Max Altitude</span>
+              </div>
+              <div className="text-xl font-bold text-gray-900">
+                {unsavedPoints.length > 0 ? Math.max(...unsavedPoints.map((p) => p.z)).toFixed(0) : 0}
+                <span className="text-xs font-normal text-gray-400 ml-1">m</span>
+              </div>
             </div>
-            <div className="flex items-center justify-between py-2">
-              <span className="font-medium text-gray-700">Max Altitude</span>
-              <span className="text-gray-900 font-mono">{unsavedPoints.length > 0 ? Math.max(...unsavedPoints.map((p) => p.z)).toFixed(1) : 0}m</span>
+            {/* Duration */}
+            <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex flex-col items-start gap-1 min-w-[120px]">
+              <div className="flex items-center gap-2 mb-1">
+                <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-xs font-medium text-gray-500">Duration</span>
+              </div>
+              <div className="text-xl font-bold text-gray-900">
+                {Math.round((unsavedPoints.length > 0 ? (unsavedPoints.length - 1) * 1000 + 1000 : 0) / 1000)}
+                <span className="text-xs font-normal text-gray-400 ml-1">s</span>
+              </div>
             </div>
-            <div className="flex items-center justify-between py-2">
-              <span className="font-medium text-gray-700">Colors Used</span>
-              <span className="flex -space-x-2">
-                {[...new Set(unsavedPoints.map((p) => p.color))].map((color, idx) => (
-                  <span
-                    key={color}
-                    className="inline-block w-5 h-5 rounded border border-gray-300"
-                    style={{ backgroundColor: color, zIndex: 10 - idx }}
-                    title={color}
-                  />
-                ))}
-                {new Set(unsavedPoints.map((p) => p.color)).size === 0 && (
-                  <span className="text-gray-400">—</span>
-                )}
-              </span>
+            {/* Colors */}
+            <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex flex-col items-start gap-1 min-w-[120px]">
+              <div className="flex items-center gap-2 mb-1">
+                <svg className="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM7 21h16a2 2 0 002-2v-4a2 2 0 00-2-2H7m0-9h16a2 2 0 012 2v4a2 2 0 01-2 2H7m8-13v16" />
+                </svg>
+                <span className="text-xs font-medium text-gray-500">Colors</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="text-xl font-bold text-gray-900">
+                  {new Set(unsavedPoints.map((p) => p.color)).size}
+                </div>
+                <div className="flex -space-x-1">
+                  {[...new Set(unsavedPoints.map((p) => p.color))].slice(0, 4).map((color, idx) => (
+                    <div
+                      key={color}
+                      className="w-5 h-5 rounded-full border border-white shadow-sm"
+                      style={{ backgroundColor: color, zIndex: 10 - idx }}
+                      title={color}
+                    />
+                  ))}
+                  {new Set(unsavedPoints.map((p) => p.color)).size > 4 && (
+                    <div className="w-5 h-5 rounded-full bg-gray-200 border border-white shadow-sm flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-gray-500">+{new Set(unsavedPoints.map((p) => p.color)).size - 4}</span>
+                    </div>
+                  )}
+                  {new Set(unsavedPoints.map((p) => p.color)).size === 0 && (
+                    <span className="text-gray-300 text-xs">None</span>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
